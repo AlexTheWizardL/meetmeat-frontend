@@ -55,3 +55,8 @@ export function AsyncSkia(): null {
   getResolvedPromise();
   return null;
 }
+
+// Hook to ensure Skia is loaded before using Skia APIs
+export function useSkiaLoaded(): void {
+  getResolvedPromise();
+}

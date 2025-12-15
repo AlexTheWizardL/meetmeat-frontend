@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import {
   Canvas,
   Rect,
@@ -13,7 +13,7 @@ import {
   Paragraph,
   type SkTypefaceFontProvider,
 } from '@shopify/react-native-skia';
-import { View, Text as RNText, StyleSheet, ActivityIndicator } from 'react-native';
+import { useSkiaLoaded } from '@/components/async-skia';
 import { useImageLoader } from './useImageLoader';
 import type { Event, TemplateLayout } from '@/types';
 
@@ -113,8 +113,8 @@ function createParagraph(
 }
 
 export function PosterCanvas({ width, height, event, user, layout = 'modern' }: PosterCanvasProps) {
-  const [fontProvider, setFontProvider] = useState<SkTypefaceFontProvider | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // This will suspend until Skia is loaded
+  useSkiaLoaded();
 
   const logoImage = useImageLoader(event?.logoUrl);
   const heroImage = useImageLoader(event?.heroImageUrl);
@@ -127,53 +127,16 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     [primaryColor, layout]
   );
 
-  useEffect(() => {
-    let attempts = 0;
-    const maxAttempts = 50;
-    let cancelled = false;
-
-    const tryLoad = () => {
-      if (cancelled) return;
-
-      console.warn(`[PosterCanvas] Attempt ${String(attempts + 1)} to load font provider...`);
-
-      try {
-        const provider = Skia.TypefaceFontProvider.Make();
-        console.warn('[PosterCanvas] Font provider created:', provider);
-        setFontProvider(provider);
-        console.warn('[PosterCanvas] Font provider set successfully');
-        return;
-      } catch (err) {
-        console.warn('[PosterCanvas] Error loading font provider:', err);
-      }
-
-      attempts++;
-      if (attempts < maxAttempts) {
-        setTimeout(tryLoad, 150);
-      } else {
-        console.warn('[PosterCanvas] Max attempts reached');
-        setLoadError(`Failed to load fonts after ${String(maxAttempts)} attempts`);
-      }
-    };
-
-    // Start with a small delay to let Skia initialize
-    const timeoutId = setTimeout(tryLoad, 200);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-    };
+  // Now that Skia is loaded, we can safely create the font provider
+  const fontProvider = useMemo(() => {
+    return Skia.TypefaceFontProvider.Make();
   }, []);
 
   const photoRadius = width * 0.15;
   const photoY = height * 0.5;
 
   const hexPath = useMemo(() => {
-    try {
-      return Skia.Path.MakeFromSVGString(createHexagonPath(width / 2, photoY, photoRadius));
-    } catch {
-      return null;
-    }
+    return Skia.Path.MakeFromSVGString(createHexagonPath(width / 2, photoY, photoRadius));
   }, [width, photoY, photoRadius]);
 
   const eventName = event?.name ?? 'Event Name';
@@ -183,46 +146,16 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     : '';
 
   const paragraphs = useMemo(() => {
-    if (!fontProvider) {
-      console.warn('[PosterCanvas] No font provider available for paragraphs');
-      return null;
-    }
-
-    try {
-      console.warn('[PosterCanvas] Creating paragraphs...');
-      const result = {
-        title: createParagraph(eventName, 24, textColor, width * 0.9, fontProvider, true),
-        date: dateText ? createParagraph(dateText, 12, textColor, width * 0.9, fontProvider) : null,
-        badge: createParagraph("I'm attending!", 16, primaryColor, width * 0.4, fontProvider, true),
-        name: createParagraph(user.name, 20, textColor, width * 0.8, fontProvider, true),
-        title2: createParagraph(user.title, 14, textColor, width * 0.8, fontProvider),
-        company: user.company ? createParagraph(user.company, 12, textColor, width * 0.8, fontProvider) : null,
-        location: locationText ? createParagraph(locationText, 12, textColor, width * 0.9, fontProvider) : null,
-      };
-      console.warn('[PosterCanvas] Paragraphs created successfully');
-      return result;
-    } catch (err) {
-      console.error('[PosterCanvas] Error creating paragraphs:', err);
-      return null;
-    }
+    return {
+      title: createParagraph(eventName, 24, textColor, width * 0.9, fontProvider, true),
+      date: dateText ? createParagraph(dateText, 12, textColor, width * 0.9, fontProvider) : null,
+      badge: createParagraph("I'm attending!", 16, primaryColor, width * 0.4, fontProvider, true),
+      name: createParagraph(user.name, 20, textColor, width * 0.8, fontProvider, true),
+      title2: createParagraph(user.title, 14, textColor, width * 0.8, fontProvider),
+      company: user.company ? createParagraph(user.company, 12, textColor, width * 0.8, fontProvider) : null,
+      location: locationText ? createParagraph(locationText, 12, textColor, width * 0.9, fontProvider) : null,
+    };
   }, [fontProvider, eventName, dateText, textColor, primaryColor, user.name, user.title, user.company, locationText, width]);
-
-  if (loadError) {
-    return (
-      <View style={[styles.fallback, { width, height, backgroundColor: primaryColor }]}>
-        <RNText style={[styles.fallbackText, { color: textColor }]}>{loadError}</RNText>
-      </View>
-    );
-  }
-
-  if (!fontProvider || !paragraphs) {
-    return (
-      <View style={[styles.fallback, { width, height, backgroundColor: primaryColor }]}>
-        <ActivityIndicator size="large" color={textColor} />
-        <RNText style={[styles.fallbackText, { color: textColor }]}>Preparing canvas...</RNText>
-      </View>
-    );
-  }
 
   const badgeHeight = height * 0.06;
   const badgeWidth = width * 0.45;
@@ -356,14 +289,3 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     </Canvas>
   );
 }
-
-const styles = StyleSheet.create({
-  fallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackText: {
-    fontSize: 14,
-    marginTop: 8,
-  },
-});
