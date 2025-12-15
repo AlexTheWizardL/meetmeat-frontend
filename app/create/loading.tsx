@@ -6,14 +6,6 @@ import { usePosterCreationStore } from '@/lib/stores/posterCreationStore';
 import { useEvents, useTemplates } from '@/lib/hooks';
 import { Colors, Spacing, Typography } from '@/constants';
 
-const LOADING_MESSAGES = [
-  'Analyzing event page...',
-  'Extracting event details...',
-  'Generating poster designs...',
-  'Applying brand colors...',
-  'Almost there...',
-];
-
 export default function LoadingScreen() {
   const profile = usePosterCreationStore((s) => s.profile);
   const userDetails = usePosterCreationStore((s) => s.userDetails);
@@ -26,22 +18,15 @@ export default function LoadingScreen() {
   const { parseEvent, createEvent } = useEvents();
   const { generateTemplates } = useTemplates();
 
-  const [messageIndex, setMessageIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const isGenerating = useRef(false);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const generate = async () => {
       // Prevent duplicate calls
       if (isGenerating.current) return;
       isGenerating.current = true;
+
       // Determine user details from profile or manual entry
       const finalUserDetails = userDetails ?? (profile ? {
         name: profile.name,
@@ -72,8 +57,12 @@ export default function LoadingScreen() {
           event = await createEvent({
             name: eventDetails.name,
             startDate: eventDetails.date,
-            location: eventDetails.location,
-            brandColors: eventDetails.brandColor ? [eventDetails.brandColor] : undefined,
+            location: eventDetails.location
+              ? { city: eventDetails.location, isVirtual: false }
+              : undefined,
+            brandColors: eventDetails.brandColor
+              ? { primary: eventDetails.brandColor }
+              : undefined,
           });
           setEvent(event);
         } else {
@@ -125,15 +114,9 @@ export default function LoadingScreen() {
       <View style={styles.content}>
         <ActivityIndicator size="large" color={Colors.primary} style={styles.spinner} />
         <Text style={styles.title}>Creating Your Poster</Text>
-        <Text style={styles.message}>{LOADING_MESSAGES[messageIndex]}</Text>
-        <View style={styles.progressBar}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${((messageIndex + 1) / LOADING_MESSAGES.length) * 100}%` },
-            ]}
-          />
-        </View>
+        <Text style={styles.message}>
+          Analyzing event and generating designs...
+        </Text>
       </View>
     </SafeAreaView>
   );
@@ -160,18 +143,7 @@ const styles = StyleSheet.create({
   message: {
     ...Typography.body,
     color: Colors.muted,
-    marginBottom: Spacing.xl,
-  },
-  progressBar: {
-    width: '80%',
-    height: 4,
-    backgroundColor: Colors.border,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
+    textAlign: 'center',
   },
   errorIcon: {
     fontSize: 48,

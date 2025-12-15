@@ -65,8 +65,10 @@ export const usePosterCreationStore = create<PosterCreationState>((set) => ({
         ? {
             name: event.name,
             date: event.startDate ? new Date(event.startDate).toLocaleDateString() : undefined,
-            location: event.location,
-            brandColor: event.brandColors.length > 0 ? event.brandColors[0] : undefined,
+            location: event.location
+              ? [event.location.venue, event.location.city, event.location.country].filter(Boolean).join(', ')
+              : undefined,
+            brandColor: event.brandColors?.primary,
           }
         : state.eventDetails,
     })),

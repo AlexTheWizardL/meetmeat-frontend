@@ -10,6 +10,9 @@ export type {
   Event,
   ParseEventDto,
   CreateEventDto,
+  BrandColors,
+  EventLocation,
+  VisualStyle,
 } from './event';
 
 export type {

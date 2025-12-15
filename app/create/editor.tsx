@@ -78,7 +78,7 @@ export default function EditorScreen() {
   };
 
   // Get current design from selected template or use default
-  const defaultBgColor = event?.brandColors[0] ?? Colors.primary;
+  const defaultBgColor = event?.brandColors?.primary ?? Colors.primary;
   const design: TemplateDesign = selectedTemplate?.design ?? {
     layout: 'classic',
     backgroundColor: defaultBgColor,

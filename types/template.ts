@@ -13,6 +13,7 @@ export interface TemplateElementProperties {
   fill?: string;
   fontSize?: number;
   fontFamily?: string;
+  fontWeight?: string;
 }
 
 export interface TemplateElement {

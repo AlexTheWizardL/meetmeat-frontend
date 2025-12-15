@@ -15,21 +15,27 @@ export default function EventDetailsScreen() {
 
   const [name, setName] = useState(eventDetails?.name ?? event?.name ?? '');
   const [date, setDate] = useState(eventDetails?.date ?? '');
-  const [location, setLocation] = useState(eventDetails?.location ?? event?.location ?? '');
+  // Format location from object to string
+  const formatLocation = (loc?: { venue?: string; city?: string; country?: string }) => {
+    if (!loc) return '';
+    const parts = [loc.venue, loc.city, loc.country].filter(Boolean);
+    return parts.join(', ');
+  };
+  const [location, setLocation] = useState(eventDetails?.location ?? formatLocation(event?.location));
   const [brandColor, setBrandColor] = useState(
-    eventDetails?.brandColor ?? (event?.brandColors && event.brandColors.length > 0 ? event.brandColors[0] : PRESET_COLORS[0])
+    eventDetails?.brandColor ?? event?.brandColors?.primary ?? PRESET_COLORS[0]
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (event) {
       setName(event.name);
-      setLocation(event.location ?? '');
+      setLocation(formatLocation(event.location));
       if (event.startDate) {
         setDate(new Date(event.startDate).toLocaleDateString());
       }
-      if (event.brandColors.length > 0) {
-        setBrandColor(event.brandColors[0]);
+      if (event.brandColors?.primary) {
+        setBrandColor(event.brandColors.primary);
       }
     }
   }, [event]);
