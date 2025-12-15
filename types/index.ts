@@ -15,7 +15,9 @@ export type {
 export type {
   Template,
   TemplateElement,
-  TemplateStatus,
+  TemplateDesign,
+  TemplateLayout,
+  TemplateElementProperties,
   GenerateTemplatesDto,
 } from './template';
 

@@ -10,8 +10,8 @@ interface TabIconProps {
 function TabIcon({ name, focused }: TabIconProps) {
   // Simple text-based icons for now - can replace with proper icons later
   const icons: Record<string, string> = {
-    home: '+',
-    history: '\u2630', // ☰
+    home: '\u2302', // ⌂
+    history: '\u25F7', // ◷
     profiles: '\u263A', // ☺
   };
 
@@ -38,7 +38,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Create',
+          title: 'Home',
           tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} />,
         }}
       />
@@ -66,8 +66,8 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     borderTopWidth: 1,
     paddingTop: Spacing.xs,
-    paddingBottom: Spacing.xs,
-    height: 60,
+    paddingBottom: Spacing.md,
+    height: 80,
   },
   tabBarLabel: {
     fontSize: 12,

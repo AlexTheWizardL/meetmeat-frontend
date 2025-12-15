@@ -2,30 +2,38 @@
  * Template types matching backend API
  */
 
-export type TemplateStatus = 'generating' | 'ready' | 'failed';
+export type TemplateLayout = 'classic' | 'modern' | 'minimal' | 'bold';
 
-export interface TemplateElement {
-  id: string;
-  type: 'text' | 'image' | 'shape';
+export interface TemplateElementProperties {
   x: number;
   y: number;
   width: number;
   height: number;
   content?: string;
-  color?: string;
+  fill?: string;
   fontSize?: number;
-  fontWeight?: string;
-  imageUrl?: string;
-  backgroundColor?: string;
+  fontFamily?: string;
+}
+
+export interface TemplateElement {
+  id: string;
+  type: 'text' | 'image' | 'shape' | 'logo';
+  properties: TemplateElementProperties;
+}
+
+export interface TemplateDesign {
+  layout: TemplateLayout;
+  backgroundColor: string;
+  elements: TemplateElement[];
 }
 
 export interface Template {
   id: string;
   name: string;
-  eventId: string;
-  layoutData: TemplateElement[];
-  previewUrl?: string;
-  status: TemplateStatus;
+  eventId?: string;
+  design: TemplateDesign;
+  previewImageUrl?: string;
+  status: 'active' | 'archived';
   usageCount: number;
   createdAt: string;
   updatedAt: string;
