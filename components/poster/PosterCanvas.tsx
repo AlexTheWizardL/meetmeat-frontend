@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect } from 'react';
 import {
   Canvas,
   Rect,
-  Text,
   Group,
   LinearGradient,
   vec,
@@ -11,9 +10,10 @@ import {
   Image,
   RoundedRect,
   Fill,
-  type SkFont,
+  Paragraph,
+  type SkTypefaceFontProvider,
 } from '@shopify/react-native-skia';
-import { Platform, View, Text as RNText, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text as RNText, StyleSheet, ActivityIndicator } from 'react-native';
 import { useImageLoader } from './useImageLoader';
 import type { Event, TemplateLayout } from '@/types';
 
@@ -31,16 +31,6 @@ interface PosterCanvasProps {
   user: UserInfo;
   layout?: TemplateLayout;
 }
-
-interface FontSet {
-  font: SkFont;
-  titleFont: SkFont;
-  smallFont: SkFont;
-  badgeFont: SkFont;
-  nameFont: SkFont;
-}
-
-const fontFamily = Platform.select({ ios: 'Helvetica', default: 'sans-serif' });
 
 const getGradientColors = (primaryColor: string, layout: TemplateLayout): [string, string] => {
   const hex = primaryColor.replace('#', '');
@@ -93,54 +83,39 @@ const formatDate = (dateStr?: string): string => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-function tryLoadFonts(): FontSet | null {
-  try {
-    const fontMgr = Skia.FontMgr.System();
-    const baseTypeface = fontMgr.matchFamilyStyle(fontFamily, { weight: 400 });
-    const boldTypeface = fontMgr.matchFamilyStyle(fontFamily, { weight: 700 });
+function createParagraph(
+  text: string,
+  fontSize: number,
+  color: string,
+  width: number,
+  fontProvider: SkTypefaceFontProvider,
+  bold = false
+) {
+  const paragraphStyle = {
+    textAlign: 0,
+  };
 
-    return {
-      font: Skia.Font(baseTypeface, 16),
-      titleFont: Skia.Font(boldTypeface, 28),
-      smallFont: Skia.Font(baseTypeface, 12),
-      badgeFont: Skia.Font(boldTypeface, 18),
-      nameFont: Skia.Font(boldTypeface, 22),
-    };
-  } catch {
-    return null;
-  }
-}
+  const textStyle = {
+    color: Skia.Color(color),
+    fontSize,
+    fontFamilies: ['Roboto', 'sans-serif'],
+    fontStyle: { weight: bold ? 700 : 400 },
+  };
 
-function useSkiaFonts(): FontSet | null {
-  const [fonts, setFonts] = useState<FontSet | null>(() => tryLoadFonts());
+  const builder = Skia.ParagraphBuilder.Make(paragraphStyle, fontProvider);
+  builder.pushStyle(textStyle);
+  builder.addText(text);
+  builder.pop();
 
-  useEffect(() => {
-    if (fonts) return;
-
-    let attempts = 0;
-    const maxAttempts = 20;
-
-    const tryLoad = () => {
-      const loaded = tryLoadFonts();
-      if (loaded) {
-        setFonts(loaded);
-        return;
-      }
-      attempts++;
-      if (attempts < maxAttempts) {
-        setTimeout(tryLoad, 100);
-      }
-    };
-
-    const timeoutId = setTimeout(tryLoad, 100);
-    return () => clearTimeout(timeoutId);
-  }, [fonts]);
-
-  return fonts;
+  const paragraph = builder.build();
+  paragraph.layout(width);
+  return paragraph;
 }
 
 export function PosterCanvas({ width, height, event, user, layout = 'modern' }: PosterCanvasProps) {
-  const fonts = useSkiaFonts();
+  const [fontProvider, setFontProvider] = useState<SkTypefaceFontProvider | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const logoImage = useImageLoader(event?.logoUrl);
   const heroImage = useImageLoader(event?.heroImageUrl);
   const userPhoto = useImageLoader(user.photoUrl);
@@ -151,6 +126,44 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     () => getGradientColors(primaryColor, layout),
     [primaryColor, layout]
   );
+
+  useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 50;
+    let cancelled = false;
+
+    const tryLoad = () => {
+      if (cancelled) return;
+
+      console.warn(`[PosterCanvas] Attempt ${String(attempts + 1)} to load font provider...`);
+
+      try {
+        const provider = Skia.TypefaceFontProvider.Make();
+        console.warn('[PosterCanvas] Font provider created:', provider);
+        setFontProvider(provider);
+        console.warn('[PosterCanvas] Font provider set successfully');
+        return;
+      } catch (err) {
+        console.warn('[PosterCanvas] Error loading font provider:', err);
+      }
+
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(tryLoad, 150);
+      } else {
+        console.warn('[PosterCanvas] Max attempts reached');
+        setLoadError(`Failed to load fonts after ${String(maxAttempts)} attempts`);
+      }
+    };
+
+    // Start with a small delay to let Skia initialize
+    const timeoutId = setTimeout(tryLoad, 200);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   const photoRadius = width * 0.15;
   const photoY = height * 0.5;
@@ -169,7 +182,40 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     ? [event.location.city, event.location.country].filter(Boolean).join(', ')
     : '';
 
-  if (!fonts) {
+  const paragraphs = useMemo(() => {
+    if (!fontProvider) {
+      console.warn('[PosterCanvas] No font provider available for paragraphs');
+      return null;
+    }
+
+    try {
+      console.warn('[PosterCanvas] Creating paragraphs...');
+      const result = {
+        title: createParagraph(eventName, 24, textColor, width * 0.9, fontProvider, true),
+        date: dateText ? createParagraph(dateText, 12, textColor, width * 0.9, fontProvider) : null,
+        badge: createParagraph("I'm attending!", 16, primaryColor, width * 0.4, fontProvider, true),
+        name: createParagraph(user.name, 20, textColor, width * 0.8, fontProvider, true),
+        title2: createParagraph(user.title, 14, textColor, width * 0.8, fontProvider),
+        company: user.company ? createParagraph(user.company, 12, textColor, width * 0.8, fontProvider) : null,
+        location: locationText ? createParagraph(locationText, 12, textColor, width * 0.9, fontProvider) : null,
+      };
+      console.warn('[PosterCanvas] Paragraphs created successfully');
+      return result;
+    } catch (err) {
+      console.error('[PosterCanvas] Error creating paragraphs:', err);
+      return null;
+    }
+  }, [fontProvider, eventName, dateText, textColor, primaryColor, user.name, user.title, user.company, locationText, width]);
+
+  if (loadError) {
+    return (
+      <View style={[styles.fallback, { width, height, backgroundColor: primaryColor }]}>
+        <RNText style={[styles.fallbackText, { color: textColor }]}>{loadError}</RNText>
+      </View>
+    );
+  }
+
+  if (!fontProvider || !paragraphs) {
     return (
       <View style={[styles.fallback, { width, height, backgroundColor: primaryColor }]}>
         <ActivityIndicator size="large" color={textColor} />
@@ -178,7 +224,6 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     );
   }
 
-  const badgeText = "I'm attending!";
   const badgeHeight = height * 0.06;
   const badgeWidth = width * 0.45;
 
@@ -217,40 +262,36 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
         />
       )}
 
-      <Text
+      <Paragraph
+        paragraph={paragraphs.title}
         x={width * 0.05}
-        y={height * 0.22}
-        text={eventName}
-        font={fonts.titleFont}
-        color={textColor}
+        y={height * 0.18}
+        width={width * 0.9}
       />
 
-      {dateText && (
-        <Text
+      {paragraphs.date && (
+        <Paragraph
+          paragraph={paragraphs.date}
           x={width * 0.05}
-          y={height * 0.28}
-          text={dateText}
-          font={fonts.smallFont}
-          color={textColor}
-          opacity={0.8}
+          y={height * 0.25}
+          width={width * 0.9}
         />
       )}
 
       <Group>
         <RoundedRect
           x={width * 0.05}
-          y={height * 0.32}
+          y={height * 0.30}
           width={badgeWidth}
           height={badgeHeight}
           r={6}
           color={textColor}
         />
-        <Text
-          x={width * 0.05 + 16}
-          y={height * 0.32 + badgeHeight / 2 + 6}
-          text={badgeText}
-          font={fonts.badgeFont}
-          color={primaryColor}
+        <Paragraph
+          paragraph={paragraphs.badge}
+          x={width * 0.05 + 12}
+          y={height * 0.30 + 8}
+          width={badgeWidth - 24}
         />
       </Group>
 
@@ -281,42 +322,35 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
         <Path path={hexPath} style="stroke" strokeWidth={3} color={textColor} />
       )}
 
-      <Text
+      <Paragraph
+        paragraph={paragraphs.name}
         x={width * 0.1}
-        y={height * 0.72}
-        text={user.name}
-        font={fonts.nameFont}
-        color={textColor}
+        y={height * 0.68}
+        width={width * 0.8}
       />
 
-      <Text
+      <Paragraph
+        paragraph={paragraphs.title2}
         x={width * 0.1}
-        y={height * 0.78}
-        text={user.title}
-        font={fonts.font}
-        color={textColor}
-        opacity={0.9}
+        y={height * 0.74}
+        width={width * 0.8}
       />
 
-      {user.company && (
-        <Text
+      {paragraphs.company && (
+        <Paragraph
+          paragraph={paragraphs.company}
           x={width * 0.1}
-          y={height * 0.83}
-          text={user.company}
-          font={fonts.smallFont}
-          color={textColor}
-          opacity={0.7}
+          y={height * 0.79}
+          width={width * 0.8}
         />
       )}
 
-      {locationText && (
-        <Text
+      {paragraphs.location && (
+        <Paragraph
+          paragraph={paragraphs.location}
           x={width * 0.05}
-          y={height * 0.94}
-          text={locationText}
-          font={fonts.smallFont}
-          color={textColor}
-          opacity={0.6}
+          y={height * 0.92}
+          width={width * 0.9}
         />
       )}
     </Canvas>
