@@ -17,7 +17,12 @@ export function useImageLoader(url: string | undefined): SkImage | null {
   }, []);
 
   useEffect(() => {
-    if (!url) {
+    if (!url || url === 'null' || url === 'undefined') {
+      setImage(null);
+      return;
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
       setImage(null);
       return;
     }

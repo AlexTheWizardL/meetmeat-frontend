@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Canvas,
   Rect,
@@ -11,8 +11,9 @@ import {
   Image,
   RoundedRect,
   Fill,
+  type SkFont,
 } from '@shopify/react-native-skia';
-import { Platform, View, Text as RNText, StyleSheet } from 'react-native';
+import { Platform, View, Text as RNText, StyleSheet, ActivityIndicator } from 'react-native';
 import { useImageLoader } from './useImageLoader';
 import type { Event, TemplateLayout } from '@/types';
 
@@ -29,6 +30,14 @@ interface PosterCanvasProps {
   event: Event | null;
   user: UserInfo;
   layout?: TemplateLayout;
+}
+
+interface FontSet {
+  font: SkFont;
+  titleFont: SkFont;
+  smallFont: SkFont;
+  badgeFont: SkFont;
+  nameFont: SkFont;
 }
 
 const fontFamily = Platform.select({ ios: 'Helvetica', default: 'sans-serif' });
@@ -84,25 +93,50 @@ const formatDate = (dateStr?: string): string => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-function useSkiaFonts() {
-  return useMemo(() => {
-    try {
-      const fontMgr = Skia.FontMgr.System();
-      const baseTypeface = fontMgr.matchFamilyStyle(fontFamily, { weight: 400 });
-      const boldTypeface = fontMgr.matchFamilyStyle(fontFamily, { weight: 700 });
+function tryLoadFonts(): FontSet | null {
+  try {
+    const fontMgr = Skia.FontMgr.System();
+    const baseTypeface = fontMgr.matchFamilyStyle(fontFamily, { weight: 400 });
+    const boldTypeface = fontMgr.matchFamilyStyle(fontFamily, { weight: 700 });
 
-      return {
-        ready: true,
-        font: Skia.Font(baseTypeface, 16),
-        titleFont: Skia.Font(boldTypeface, 28),
-        smallFont: Skia.Font(baseTypeface, 12),
-        badgeFont: Skia.Font(boldTypeface, 18),
-        nameFont: Skia.Font(boldTypeface, 22),
-      };
-    } catch {
-      return { ready: false, font: null, titleFont: null, smallFont: null, badgeFont: null, nameFont: null };
-    }
-  }, []);
+    return {
+      font: Skia.Font(baseTypeface, 16),
+      titleFont: Skia.Font(boldTypeface, 28),
+      smallFont: Skia.Font(baseTypeface, 12),
+      badgeFont: Skia.Font(boldTypeface, 18),
+      nameFont: Skia.Font(boldTypeface, 22),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function useSkiaFonts(): FontSet | null {
+  const [fonts, setFonts] = useState<FontSet | null>(() => tryLoadFonts());
+
+  useEffect(() => {
+    if (fonts) return;
+
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const tryLoad = () => {
+      const loaded = tryLoadFonts();
+      if (loaded) {
+        setFonts(loaded);
+        return;
+      }
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(tryLoad, 100);
+      }
+    };
+
+    const timeoutId = setTimeout(tryLoad, 100);
+    return () => clearTimeout(timeoutId);
+  }, [fonts]);
+
+  return fonts;
 }
 
 export function PosterCanvas({ width, height, event, user, layout = 'modern' }: PosterCanvasProps) {
@@ -135,10 +169,11 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     ? [event.location.city, event.location.country].filter(Boolean).join(', ')
     : '';
 
-  if (!fonts.ready) {
+  if (!fonts) {
     return (
       <View style={[styles.fallback, { width, height, backgroundColor: primaryColor }]}>
-        <RNText style={[styles.fallbackText, { color: textColor }]}>Loading...</RNText>
+        <ActivityIndicator size="large" color={textColor} />
+        <RNText style={[styles.fallbackText, { color: textColor }]}>Preparing canvas...</RNText>
       </View>
     );
   }
@@ -294,6 +329,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fallbackText: {
-    fontSize: 16,
+    fontSize: 14,
+    marginTop: 8,
   },
 });
