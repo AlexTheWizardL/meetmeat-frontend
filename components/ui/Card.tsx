@@ -1,4 +1,4 @@
-import { View, StyleSheet, ViewStyle, Pressable } from 'react-native';
+import { View, StyleSheet, ViewStyle, Pressable, Platform } from 'react-native';
 import { Colors, Spacing, BorderRadius } from '@/constants';
 import type { ReactNode } from 'react';
 
@@ -36,13 +36,18 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.background,
     borderRadius: BorderRadius.md,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 2,
     borderWidth: 1,
     borderColor: Colors.border,
+    // Use boxShadow on web, shadow* on native
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)' }
+      : {
+          shadowColor: Colors.shadow,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 1,
+          shadowRadius: 8,
+          elevation: 2,
+        }),
   } as ViewStyle,
   pressed: {
     opacity: 0.9,
