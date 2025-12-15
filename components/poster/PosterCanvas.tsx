@@ -3,7 +3,6 @@ import {
   Canvas,
   Rect,
   Text,
-  matchFont,
   Group,
   LinearGradient,
   vec,
@@ -13,7 +12,7 @@ import {
   RoundedRect,
   Fill,
 } from '@shopify/react-native-skia';
-import { Platform } from 'react-native';
+import { Platform, View, Text as RNText, StyleSheet } from 'react-native';
 import { useImageLoader } from './useImageLoader';
 import type { Event, TemplateLayout } from '@/types';
 
@@ -85,13 +84,29 @@ const formatDate = (dateStr?: string): string => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-export function PosterCanvas({ width, height, event, user, layout = 'modern' }: PosterCanvasProps) {
-  const font = matchFont({ fontFamily, fontSize: 16 });
-  const titleFont = matchFont({ fontFamily, fontSize: 28, fontWeight: 'bold' });
-  const smallFont = matchFont({ fontFamily, fontSize: 12 });
-  const badgeFont = matchFont({ fontFamily, fontSize: 18, fontWeight: 'bold' });
-  const nameFont = matchFont({ fontFamily, fontSize: 22, fontWeight: 'bold' });
+function useSkiaFonts() {
+  return useMemo(() => {
+    try {
+      const fontMgr = Skia.FontMgr.System();
+      const baseTypeface = fontMgr.matchFamilyStyle(fontFamily, { weight: 400 });
+      const boldTypeface = fontMgr.matchFamilyStyle(fontFamily, { weight: 700 });
 
+      return {
+        ready: true,
+        font: Skia.Font(baseTypeface, 16),
+        titleFont: Skia.Font(boldTypeface, 28),
+        smallFont: Skia.Font(baseTypeface, 12),
+        badgeFont: Skia.Font(boldTypeface, 18),
+        nameFont: Skia.Font(boldTypeface, 22),
+      };
+    } catch {
+      return { ready: false, font: null, titleFont: null, smallFont: null, badgeFont: null, nameFont: null };
+    }
+  }, []);
+}
+
+export function PosterCanvas({ width, height, event, user, layout = 'modern' }: PosterCanvasProps) {
+  const fonts = useSkiaFonts();
   const logoImage = useImageLoader(event?.logoUrl);
   const heroImage = useImageLoader(event?.heroImageUrl);
   const userPhoto = useImageLoader(user.photoUrl);
@@ -107,7 +122,11 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
   const photoY = height * 0.5;
 
   const hexPath = useMemo(() => {
-    return Skia.Path.MakeFromSVGString(createHexagonPath(width / 2, photoY, photoRadius));
+    try {
+      return Skia.Path.MakeFromSVGString(createHexagonPath(width / 2, photoY, photoRadius));
+    } catch {
+      return null;
+    }
   }, [width, photoY, photoRadius]);
 
   const eventName = event?.name ?? 'Event Name';
@@ -116,9 +135,17 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     ? [event.location.city, event.location.country].filter(Boolean).join(', ')
     : '';
 
+  if (!fonts.ready) {
+    return (
+      <View style={[styles.fallback, { width, height, backgroundColor: primaryColor }]}>
+        <RNText style={[styles.fallbackText, { color: textColor }]}>Loading...</RNText>
+      </View>
+    );
+  }
+
   const badgeText = "I'm attending!";
-  const badgeWidth = badgeFont.measureText(badgeText).width + 32;
   const badgeHeight = height * 0.06;
+  const badgeWidth = width * 0.45;
 
   return (
     <Canvas style={{ width, height }}>
@@ -159,7 +186,7 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
         x={width * 0.05}
         y={height * 0.22}
         text={eventName}
-        font={titleFont}
+        font={fonts.titleFont}
         color={textColor}
       />
 
@@ -168,7 +195,7 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
           x={width * 0.05}
           y={height * 0.28}
           text={dateText}
-          font={smallFont}
+          font={fonts.smallFont}
           color={textColor}
           opacity={0.8}
         />
@@ -187,7 +214,7 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
           x={width * 0.05 + 16}
           y={height * 0.32 + badgeHeight / 2 + 6}
           text={badgeText}
-          font={badgeFont}
+          font={fonts.badgeFont}
           color={primaryColor}
         />
       </Group>
@@ -220,28 +247,28 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
       )}
 
       <Text
-        x={width / 2 - nameFont.measureText(user.name).width / 2}
+        x={width * 0.1}
         y={height * 0.72}
         text={user.name}
-        font={nameFont}
+        font={fonts.nameFont}
         color={textColor}
       />
 
       <Text
-        x={width / 2 - font.measureText(user.title).width / 2}
+        x={width * 0.1}
         y={height * 0.78}
         text={user.title}
-        font={font}
+        font={fonts.font}
         color={textColor}
         opacity={0.9}
       />
 
       {user.company && (
         <Text
-          x={width / 2 - smallFont.measureText(user.company).width / 2}
+          x={width * 0.1}
           y={height * 0.83}
           text={user.company}
-          font={smallFont}
+          font={fonts.smallFont}
           color={textColor}
           opacity={0.7}
         />
@@ -252,7 +279,7 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
           x={width * 0.05}
           y={height * 0.94}
           text={locationText}
-          font={smallFont}
+          font={fonts.smallFont}
           color={textColor}
           opacity={0.6}
         />
@@ -260,3 +287,13 @@ export function PosterCanvas({ width, height, event, user, layout = 'modern' }: 
     </Canvas>
   );
 }
+
+const styles = StyleSheet.create({
+  fallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackText: {
+    fontSize: 16,
+  },
+});
